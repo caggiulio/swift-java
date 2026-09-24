@@ -54,6 +54,37 @@ struct SwiftSymbolTableSuite {
     #expect(symbolTable.lookupType("Z", parent: nil) == nil)
   }
 
+  @Test func deferredExtensionKeepsSourceFilePath() throws {
+    // The extension is visited before the file declaring the extended type,
+    // so it is resolved late (in `finalize()`); nested types must still be
+    // attributed to the file they were declared in.
+    let extensionFile: SourceFileSyntax = """
+      extension Outer.Inner {
+        public struct Deferred {}
+      }
+      """
+    let declarationFile: SourceFileSyntax = """
+      public enum Outer {
+        public enum Inner {}
+      }
+      """
+    let symbolTable = SwiftSymbolTable.setup(
+      moduleName: "MyModule",
+      [
+        .init(syntax: extensionFile, path: "Feature/Feature+Model.swift"),
+        .init(syntax: declarationFile, path: "Core/Outer.swift"),
+      ],
+      config: nil,
+      sourceDependencies: SourceDependencies(),
+    )
+
+    let outer = try #require(symbolTable.lookupType("Outer", parent: nil))
+    let inner = try #require(symbolTable.lookupType("Inner", parent: outer))
+    let deferred = try #require(symbolTable.lookupType("Deferred", parent: inner))
+    #expect(deferred.sourceFilePath == "Feature/Feature+Model.swift")
+    #expect(inner.sourceFilePath == "Core/Outer.swift")
+  }
+
   @Test func moduleScopedLookup() throws {
     let symbolTable = makeSymbolTable(
       moduleName: "MyModule",
