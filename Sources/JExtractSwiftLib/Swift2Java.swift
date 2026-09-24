@@ -201,18 +201,22 @@ public func collectAllFiles(suffix: String, in inputPaths: [URL], log: Logger) -
   ]
 
   for path in inputPaths {
+    var filesInPath: OrderedSet<URL> = []
     do {
       try collectFilesFromPath(
         path,
         suffix: suffix,
         fileManager: fileManager,
         resourceKeys: resourceKeys,
-        into: &allFiles,
+        into: &filesInPath,
         log: log
       )
     } catch {
       log.trace("Failed to collect paths in: \(path), skipping.")
     }
+    // Directory enumeration order is filesystem-dependent (e.g. hash-ordered on APFS);
+    // sort so that extraction output is deterministic across machines.
+    allFiles.append(contentsOf: filesInPath.sorted { $0.path < $1.path })
   }
 
   return allFiles
